@@ -1,8 +1,10 @@
 // netlify/functions/lookup.js
 //
 // This runs on Netlify's servers (not in the browser), so it's safe to keep
-// the Anthropic API key here as an environment variable. Set it in:
-// Netlify dashboard → Site configuration → Environment variables → ANTHROPIC_API_KEY
+// the Gemini API key here as an environment variable. Set it in:
+// Netlify dashboard → Site configuration → Environment variables → GEMINI_API_KEY
+//
+// Get a free key (no credit card) at: https://aistudio.google.com/apikey
 
 exports.handler = async (event) => {
   // CORS headers so the same-site frontend can call this
@@ -24,16 +26,16 @@ exports.handler = async (event) => {
     };
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   console.log("API key present:", !!apiKey, "length:", apiKey ? apiKey.length : 0);
   if (!apiKey) {
-    console.log("ERROR: ANTHROPIC_API_KEY env var is not set or not visible to this function");
+    console.log("ERROR: GEMINI_API_KEY env var is not set or not visible to this function");
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         error:
-          "Server is missing ANTHROPIC_API_KEY. Add it in Netlify → Site configuration → Environment variables, then redeploy.",
+          "Server is missing GEMINI_API_KEY. Add it in Netlify → Site configuration → Environment variables, then redeploy.",
       }),
     };
   }
@@ -63,7 +65,7 @@ exports.handler = async (event) => {
 2. English meaning (a clear, concise definition, 1-2 sentences)
 3. Three example sentences using "${word}" naturally. In each sentence, wrap the word "${word}" (or its inflection) in <b> tags.
 
-Respond ONLY in this exact JSON format (no markdown, no extra text):
+Respond ONLY in this exact JSON format (no markdown, no extra text, no code fences):
 {
   "hindi": "...",
   "english": "...",
@@ -71,36 +73,38 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
 }`;
 
   try {
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-5",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+    const geminiRes = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
 
-    const data = await anthropicRes.json();
+    const data = await geminiRes.json();
 
-    if (!anthropicRes.ok) {
-      console.log("ERROR: Anthropic API returned", anthropicRes.status, JSON.stringify(data));
+    if (!geminiRes.ok) {
+      console.log("ERROR: Gemini API returned", geminiRes.status, JSON.stringify(data));
       return {
-        statusCode: anthropicRes.status,
+        statusCode: geminiRes.status,
         headers,
         body: JSON.stringify({
-          error: data.error?.message || "Anthropic API error",
+          error: data.error?.message || "Gemini API error",
         }),
       };
     }
 
-    const text = (data.content || [])
-      .map((b) => b.text || "")
-      .join("");
+    const text =
+      data.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
     const clean = text.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean);
 
