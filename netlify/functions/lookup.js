@@ -25,7 +25,9 @@ exports.handler = async (event) => {
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
+  console.log("API key present:", !!apiKey, "length:", apiKey ? apiKey.length : 0);
   if (!apiKey) {
+    console.log("ERROR: ANTHROPIC_API_KEY env var is not set or not visible to this function");
     return {
       statusCode: 500,
       headers,
@@ -86,6 +88,7 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
     const data = await anthropicRes.json();
 
     if (!anthropicRes.ok) {
+      console.log("ERROR: Anthropic API returned", anthropicRes.status, JSON.stringify(data));
       return {
         statusCode: anthropicRes.status,
         headers,
@@ -107,6 +110,7 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
       body: JSON.stringify(parsed),
     };
   } catch (err) {
+    console.log("ERROR: caught exception:", err.message);
     return {
       statusCode: 500,
       headers,
